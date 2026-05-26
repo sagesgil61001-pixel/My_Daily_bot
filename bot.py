@@ -9,8 +9,9 @@ import pytz
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-TOKEN    = os.environ['TELEGRAM_TOKEN']
-CHAT_ID  = int(os.environ['CHAT_ID'])
+TOKEN   = os.environ['TELEGRAM_TOKEN']
+_cid_env = os.environ.get('CHAT_ID', '0').strip()
+CHAT_ID  = int(_cid_env) if _cid_env not in ('', '0') else None
 TZ       = pytz.timezone('Asia/Jerusalem')
 TASKS_FILE = 'tasks.json'
 
@@ -84,6 +85,8 @@ def evening_keyboard(tasks: list) -> InlineKeyboardMarkup:
 # ─── Scheduled Jobs ───────────────────────────────────────────────────────────
 
 async def job_morning(context: ContextTypes.DEFAULT_TYPE):
+    if not CHAT_ID:
+        return
     today = datetime.now(TZ).date()
     tasks = build_day_tasks(today)
 
@@ -99,6 +102,8 @@ async def job_morning(context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=CHAT_ID, text=morning_text(tasks, today), parse_mode='HTML')
 
 async def job_evening(context: ContextTypes.DEFAULT_TYPE):
+    if not CHAT_ID:
+        return
     data    = load()
     session = data.get('today_session')
 
@@ -179,10 +184,16 @@ async def cb_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cid = update.effective_chat.id
-    await update.message.reply_text(
-        f"✅ הבוט פעיל!\n\nה-Chat ID שלך הוא:\n<code>{cid}</code>\n\nהוסף אותו ל-Railway כ-CHAT_ID",
-        parse_mode='HTML'
-    )
+    if not CHAT_ID:
+        await update.message.reply_text(
+            f"✅ הבוט עובד!\n\n"
+            f"כעת הוסף משתנה סביבה ב-Railway:\n"
+            f"<b>CHAT_ID</b> = <code>{cid}</code>\n\n"
+            f"לאחר מכן הפעל מחדש את הסרוויס — הבוט יתחיל לשלוח הודעות.",
+            parse_mode='HTML'
+        )
+    elif cid == CHAT_ID:
+        await update.message.reply_text("✅ הבוט פעיל! /help לרשימת פקודות", parse_mode='HTML')
 
 async def cmd_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     today = datetime.now(TZ).date()
